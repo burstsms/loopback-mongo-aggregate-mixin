@@ -4,6 +4,33 @@ Aggregate = require('./query');
 
 debug = require('debug')('loopback:mixins:aggregate');
 
+function _findObjects(obj, targetProp, finalResults) {
+
+  function getObject(theObject) {
+    let result = null;
+    if (theObject instanceof Array) {
+      for (let i = 0; i < theObject.length; i++) {
+        getObject(theObject[i]);
+      }
+    } else {
+      for (let prop in theObject) {
+        if (theObject.hasOwnProperty(prop)) {
+          console.log(prop + ': ' + theObject[prop]);
+          if (prop === targetProp) {
+            console.log('--found id');
+              finalResults.push(theObject);
+          }
+          if (theObject[prop] instanceof Object || theObject[prop] instanceof Array) {
+            getObject(theObject[prop]);
+          }
+        }
+      }
+    }
+  }
+  getObject(obj);
+
+};
+
 module.exports = function(Model) {
   var rewriteId;
   rewriteId = function(doc) {
@@ -17,15 +44,26 @@ module.exports = function(Model) {
     return doc;
   };
   Model.aggregate = function(filter, options, callback) {
-    var aggregate, collection, connector, cursor, model, where;
+    var aggregate, collection, connector, cursor, model, result, subtracts, where;
     connector = this.getConnector();
     model = Model.modelName;
     debug('aggregate', model);
     if (!filter.aggregate) {
       return callback(new Error('no aggregate filter'));
     }
+    subtracts = new Array;
+    result = _findObjects(filter.aggregate, '$subtract', subtracts);
+    subtracts.forEach(function(value) {
+      var error;
+      try {
+        return value.$subtract[0] = new Date(value.$subtract[0]);
+      } catch (error1) {
+        error = error1;
+      }
+    });
     aggregate = new Aggregate(filter.aggregate);
     if (filter.where) {
+      where = Model._coerce(filter.where);
       where = connector.buildWhere(model, filter.where);
       aggregate.pipeline.unshift({
         '$match': where
